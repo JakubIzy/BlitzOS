@@ -5,14 +5,26 @@
 uint64_t hhdm_offset;
 
 static bump_allocator_t early_alloc;
+static uint64_t region_start_phys;
+static uint64_t region_limit_phys;
 
 void *bootmm_phys_to_virt(uint64_t phys) {
     return (void *)(phys + hhdm_offset);
 }
 
 void bootmm_init(uint64_t start_phys, uint64_t size) {
+    region_start_phys = start_phys;
+    region_limit_phys = start_phys + size;
     early_alloc.current = start_phys;
-    early_alloc.limit = start_phys + size;
+    early_alloc.limit = region_limit_phys;
+}
+
+uint64_t bootmm_region_start_phys(void) {
+    return region_start_phys;
+}
+
+uint64_t bootmm_region_limit_phys(void) {
+    return region_limit_phys;
 }
 
 void *bootmm_memset(void *dest, int value, uint64_t count) {

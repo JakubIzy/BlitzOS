@@ -44,18 +44,16 @@ override LDFLAGS += \
 
 all: bin/kernel.elf
 
-initialize: clean
-	-mkdir build
-	-mkdir bin
-	-mkdir lib
-	-mkdir build/kernel
-	-mkdir build/kernel/drivers
-	-mkdir build/kernel/drivers/framebuffer
-	-mkdir build/kernel/mm
-	-mkdir build/kernel/mm/bootmm
-	-mkdir disk
-	-mkdir disk/efi
-	-mkdir disk/root
+# Fresh trees need output dirs before compiling/linking.
+$(shell mkdir -p build/kernel \
+                 build/kernel/drivers/framebuffer \
+				 build/kernel/mm/bootmm \
+				 build/kernel/mm/pmm \
+				 bin \
+				 build \
+				 disk/efi \
+				 disk/root \
+				 2>/dev/null)
 
 
 clean:
@@ -67,7 +65,8 @@ clean:
 download_libs:
 	@echo "Downloading libraries..."
 	@echo "[0/1] Cloning Limine bootloader..."
-	@cd lib && git clone https://github.com/Limine-Bootloader/Limine.git
+	@mkdir -p lib
+	@cd lib && test -d limine || git clone https://github.com/Limine-Bootloader/Limine.git limine
 	@echo "[1/1] Done!"
 
 
@@ -85,8 +84,8 @@ partition_disk:
 
 mount_disk:
 	@echo 'Mounting partitions...'
-	-@sudo mount /dev/sda1 disk/efi
-	-@sudo mount /dev/sda2 disk/root
+	-@sudo mount ${DISK}1 disk/efi
+	-@sudo mount ${DISK}2 disk/root
 
 
 install_limine: mount_disk
@@ -99,6 +98,7 @@ install_kernel:
 	@echo "Installing kernel..."
 	-@sudo mkdir disk/root/kernel
 	@sudo cp bin/kernel.elf disk/root/kernel/kernel.elf
+	@echo "Done"
 
 
 deploy: install_limine install_kernel
@@ -116,7 +116,15 @@ ${DRIVERS_B}/framebuffer/colors.o: ${DRIVERS}/framebuffer/colors.c
 ${MM_B}/bootmm/main.o: ${MM}/bootmm/main.c
 	${CC} ${CFLAGS} -c -o $@ $<
 
+${MM_B}/pmm/main.o: ${MM}/pmm/main.c
+	${CC} ${CFLAGS} -c -o $@ $<
 
 
-bin/kernel.elf: ${KERNEL_B}/kernel.o ${DRIVERS_B}/framebuffer/main.o ${DRIVERS_B}/framebuffer/colors.o ${MM_B}/bootmm/main.o ${KERNEL}/linker.lds
+
+bin/kernel.elf: ${KERNEL_B}/kernel.o \
+                ${DRIVERS_B}/framebuffer/main.o \
+				${DRIVERS_B}/framebuffer/colors.o \
+				${MM_B}/bootmm/main.o \
+				${MM_B}/pmm/main.o \
+				${KERNEL}/linker.lds
 	${LD} ${LDFLAGS} -T ${KERNEL}/linker.lds -o $@ $(filter %.o,$^)

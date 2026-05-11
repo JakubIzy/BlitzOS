@@ -5,10 +5,14 @@
 #include "drivers/framebuffer/include/main.h"
 #include "drivers/framebuffer/include/colors.h"
 #include "mm/bootmm/include/main.h"
+#include "mm/pmm/include/main.h"
 
 #define ALIGN_UP(x, a) (((x) + (a) - 1) & ~((a) - 1))
 
 extern char _kernel_end[];
+
+static uint64_t g_kernel_phys_base;
+static uint64_t g_kernel_phys_end_exclusive;
 // Set the base revision to 6, this is recommended as this is the latest
 // base revision described by the Limine boot protocol specification.
 // See specification for further info.
@@ -139,6 +143,9 @@ void init_early_allocator(void) {
     }
     uint64_t kernel_end_phys = ALIGN_UP(pbase + (kern_end_virt - vbase), 4096);
 
+    g_kernel_phys_base = pbase;
+    g_kernel_phys_end_exclusive = kernel_end_phys;
+
     for (uint64_t i = 0; i < mmap->entry_count; i++) {
         struct limine_memmap_entry *entry = mmap->entries[i];
 
@@ -148,6 +155,10 @@ void init_early_allocator(void) {
 
         uint64_t base = entry->base;
         uint64_t end = base + entry->length;
+
+        if (end < base) {
+            continue;
+        }
 
         if (kernel_end_phys >= base &&
             kernel_end_phys < end) {
@@ -188,8 +199,45 @@ void kmain(void) {
     fb_init(framebuffer);
     fb_draw_rect(100, 100, 200, 150, fb_color(255, 255, 255));
 
+    // Init bootmm
     init_early_allocator();
 
+    // Init pmm
+    struct limine_memmap_response *memmap = memmap_request.response;
+
+    if (memmap == NULL) {
+        hcf();
+    }
+
+    uint64_t phys_top = 0;
+
+    for (uint64_t i = 0; i < memmap->entry_count; i++) {
+        struct limine_memmap_entry *e = memmap->entries[i];
+        uint64_t end = e->base + e->length;
+
+        if (end < e->base) {
+            /* overflow on base+length — skip or handle */
+            continue;
+        }
+        if (end > phys_top) {
+            phys_top = end;
+        }
+    }
+    bool pmm_success = pmm_init(ALIGN_UP(phys_top, 4096), memmap);
+    if (!pmm_success) {
+        hcf();
+    }
+
+    if (g_kernel_phys_end_exclusive > g_kernel_phys_base) {
+        pmm_reserve_range(g_kernel_phys_base,
+                          g_kernel_phys_end_exclusive - g_kernel_phys_base);
+    }
+
+    uint64_t boot_lo = bootmm_region_start_phys();
+    uint64_t boot_hi = bootmm_region_limit_phys();
+    if (boot_hi > boot_lo) {
+        pmm_reserve_range(boot_lo, boot_hi - boot_lo);
+    }
 
     // We're done, just hang...
     hcf();

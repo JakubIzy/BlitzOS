@@ -41,6 +41,20 @@ RETURN: none
 void bootmm_init(uint64_t start_phys, uint64_t size);
 
 /*
+FUNCTION: bootmm_region_start_phys
+DESCRIPTION: Physical base of the bump arena configured by bootmm_init (inclusive).
+RETURN: start_phys from the last successful bootmm_init; 0 if never initialized.
+*/
+uint64_t bootmm_region_start_phys(void);
+
+/*
+FUNCTION: bootmm_region_limit_phys
+DESCRIPTION: Physical end of the bump arena (exclusive): last valid byte + 1.
+RETURN: limit from bootmm_init; 0 if never initialized.
+*/
+uint64_t bootmm_region_limit_phys(void);
+
+/*
 FUNCTION: bootmm_memset
 DESCRIPTION: Fills memory with a byte value—freestanding equivalent for zeroing allocations without libc.
 ARGUMENTS:

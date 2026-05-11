@@ -33,7 +33,12 @@ const struct framebuffer *fb_get(void) {
 }
 
 int fb_putpixel(uint64_t x, uint64_t y, uint32_t color) {
-    if (fb.address == 0 || fb.bpp != 32) return 1;
+    if (fb.address == 0 || fb.bpp != 32) {
+        return 1;
+    }
+    if (fb.pitch < 4 || (fb.pitch % 4) != 0) {
+        return 1;
+    }
     if (
         x >= fb.width ||
         y >= fb.height
@@ -46,8 +51,30 @@ int fb_putpixel(uint64_t x, uint64_t y, uint32_t color) {
 }
 
 void fb_draw_rect(uint64_t x, uint64_t y, uint64_t width, uint64_t height, uint32_t color) {
-    for (uint64_t yy = y; yy<y+height; yy++) {
-        for (uint64_t xx = x; xx<x+width; xx++) {
+    if (width == 0 || height == 0) {
+        return;
+    }
+    if (x >= fb.width || y >= fb.height) {
+        return;
+    }
+
+    uint64_t max_w = fb.width - x;
+    uint64_t max_h = fb.height - y;
+    if (width > max_w) {
+        width = max_w;
+    }
+    if (height > max_h) {
+        height = max_h;
+    }
+
+    uint64_t y_end = y + height;
+    uint64_t x_end = x + width;
+    if (y_end < y || x_end < x) {
+        return;
+    }
+
+    for (uint64_t yy = y; yy < y_end; yy++) {
+        for (uint64_t xx = x; xx < x_end; xx++) {
             fb_putpixel(xx, yy, color);
         }
     }
